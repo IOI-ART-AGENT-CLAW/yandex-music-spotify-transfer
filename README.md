@@ -24,7 +24,7 @@ Current version focuses on liked tracks. The architecture is intentionally small
 
 This script prefers dry-run reports and conservative matching before writing to Spotify.
 
-## Credentials
+## Credentials And API Tokens
 
 Do not put tokens in the repo. Use environment variables:
 
@@ -34,16 +34,128 @@ export SPOTIFY_CLIENT_ID='...'
 export SPOTIFY_CLIENT_SECRET='...'
 ```
 
-Spotify app setup:
+Create a local `.env` file if that is easier, but keep it untracked:
 
-- Create an app in the Spotify Developer Dashboard.
-- Add redirect URI: `http://127.0.0.1:8888/callback`
-- Required scopes are `playlist-modify-private playlist-modify-public`.
+```bash
+cp .env.example .env
+nano .env
+set -a
+. ./.env
+set +a
+```
 
-Yandex Music token:
+### Spotify Credentials
 
-- Yandex Music has no normal public OAuth app flow for this use case.
-- The script relies on the unofficial `yandex-music` library, so the token is sensitive and the API can break.
+Spotify uses the official Spotify Web API. For a personal transfer script, use
+Authorization Code Flow because the script needs permission to create or edit
+playlists in your own Spotify account.
+
+1. Open the Spotify Developer Dashboard:
+
+   <https://developer.spotify.com/dashboard>
+
+2. Sign in with the Spotify account that should receive the imported music.
+
+3. Create a new app.
+
+   Suggested values:
+
+   - App name: `Yandex Music Spotify Transfer`
+   - App description: `Personal music library transfer tool`
+   - Website: can be left empty if Spotify allows it, or use a personal/project URL.
+   - Redirect URI: `http://127.0.0.1:8888/callback`
+
+4. Open the app settings and copy:
+
+   - `Client ID` -> `SPOTIFY_CLIENT_ID`
+   - `Client secret` -> `SPOTIFY_CLIENT_SECRET`
+
+5. Make sure the redirect URI in the Spotify dashboard exactly matches the
+   redirect URI used by the script:
+
+   ```text
+   http://127.0.0.1:8888/callback
+   ```
+
+   Even a missing slash, different port, `localhost` instead of `127.0.0.1`, or
+   `https` instead of `http` can break OAuth.
+
+6. Export the credentials:
+
+   ```bash
+   export SPOTIFY_CLIENT_ID='your_client_id'
+   export SPOTIFY_CLIENT_SECRET='your_client_secret'
+   ```
+
+The script requests these Spotify scopes:
+
+```text
+playlist-modify-private playlist-modify-public
+```
+
+They are enough for creating/updating playlists. Future modules may need more
+scopes, for example `user-library-modify` for saving liked tracks directly to
+Spotify library.
+
+On the first non-dry-run execution, Spotipy prints an authorization URL. Open it,
+approve access, and paste the final redirected URL back into the terminal when
+prompted. Spotipy then caches the Spotify access/refresh token under:
+
+```text
+.cache/spotify-token.json
+```
+
+Do not commit that cache file.
+
+### Yandex Music Token
+
+Yandex Music does not provide a stable public developer app flow for this use
+case. This tool uses the unofficial `yandex-music` Python library, so the Yandex
+token is sensitive and the method can break if Yandex changes private APIs.
+
+Useful reference:
+
+<https://yandex-music.readthedocs.io/en/main/token.html>
+
+High-level process:
+
+1. Be signed in to the Yandex account that owns the Yandex Music library.
+2. Obtain a Yandex Music compatible OAuth token using one of the methods
+   described by the `yandex-music` project documentation.
+3. Export it locally:
+
+   ```bash
+   export YANDEX_MUSIC_TOKEN='your_yandex_music_token'
+   ```
+
+4. Validate it with a small dry run before importing anything:
+
+   ```bash
+   ./run_yandex_likes_to_spotify.sh --dry-run --limit 5
+   ```
+
+Security notes:
+
+- Treat `YANDEX_MUSIC_TOKEN` like a password for your Yandex Music account.
+- Do not paste it into public chats, GitHub issues, screenshots, or Notion pages.
+- Prefer storing it only in a local `.env` file or password manager.
+- If a token leaks, revoke it in Yandex account security/OAuth settings and
+  generate a new one.
+
+### Quick Credential Check
+
+After exporting all three variables, run:
+
+```bash
+python3 - <<'PY'
+import os
+for name in ("YANDEX_MUSIC_TOKEN", "SPOTIFY_CLIENT_ID", "SPOTIFY_CLIENT_SECRET"):
+    value = os.getenv(name)
+    print(f"{name}: {'set' if value else 'missing'}")
+PY
+```
+
+This only checks that variables are present. It does not print secret values.
 
 ## Install
 
